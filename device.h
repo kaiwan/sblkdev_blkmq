@@ -5,6 +5,9 @@
 #include <linux/device.h>
 #include <linux/blk-mq.h>
 #include <linux/list.h>
+#include <linux/slab.h>
+#include <linux/vmalloc.h>
+#include <linux/version.h>
 
 struct sblkdev_device {
 	struct list_head link;
@@ -19,4 +22,5 @@ struct sblkdev_device {
 
 struct sblkdev_device *sblkdev_add(int major, int minor, char *name,
 				  sector_t capacity);
+struct gendisk *sblkdev_blk_alloc_disk(int node);
 void sblkdev_remove(struct sblkdev_device *dev);
