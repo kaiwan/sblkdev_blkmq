@@ -122,9 +122,15 @@ void _submit_bio(struct bio *bio)
 #endif /* CONFIG_SBLKDEV_REQUESTS_BASED */
 
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 9, 0)
+static int _open(struct gendisk *disk, blk_mode_t mode)
+{
+	struct sblkdev_device *dev = disk->private_data;
+#else
 static int _open(struct block_device *bdev, fmode_t mode)
 {
 	struct sblkdev_device *dev = bdev->bd_disk->private_data;
+#endif
 
 	if (!dev) {
 		pr_err("Invalid disk private_data\n");
@@ -136,8 +142,13 @@ static int _open(struct block_device *bdev, fmode_t mode)
 	return 0;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 9, 0)
+static void _release(struct gendisk *disk)
+{
+#else
 static void _release(struct gendisk *disk, fmode_t mode)
 {
+#endif
 	struct sblkdev_device *dev = disk->private_data;
 
 	if (!dev) {
@@ -252,8 +263,11 @@ static inline int init_tag_set(struct blk_mq_tag_set *set, void *data)
 	set->nr_maps = 1;
 	set->queue_depth = 128;
 	set->numa_node = NUMA_NO_NODE;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 14, 0)
+	set->flags = BLK_MQ_F_STACKING;
+#else
 	set->flags = BLK_MQ_F_SHOULD_MERGE | BLK_MQ_F_STACKING;
-
+#endif
 	set->cmd_size = 0;
 	set->driver_data = data;
 
@@ -288,7 +302,7 @@ static inline struct gendisk *blk_mq_alloc_disk(struct blk_mq_tag_set *set,
 #endif
 
 #ifndef HAVE_BLK_ALLOC_DISK
-static inline struct gendisk *blk_alloc_disk(int node)
+static inline struct gendisk *sblkdev_blk_alloc_disk(int node)
 {
 	struct request_queue *q;
 	struct gendisk *disk;
@@ -334,14 +348,18 @@ struct sblkdev_device *sblkdev_add(int major, int minor, char *name,
 		goto fail_kfree;
 	}
 
-#ifdef CONFIG_SBLKDEV_REQUESTS_BASED
+#ifdef CONFIG_SBLKDEV_REQUESTS_BASED        // true; defined in Makefile-standalone
 	ret = init_tag_set(&dev->tag_set, dev);
 	if (ret) {
 		pr_err("Failed to allocate tag set\n");
 		goto fail_vfree;
 	}
 
-	disk = blk_mq_alloc_disk(&dev->tag_set, dev);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 9, 0)
+	disk = blk_mq_alloc_disk(&dev->tag_set, NULL, dev); // set the queue_limits to null, so that the default limits will be used
+#else
+	disk = blk_mq_alloc_disk(&dev->tag_set, dev); // set the queue_limits to null, so that the default limits will be used
+#endif
 	if (unlikely(!disk)) {
 		ret = -ENOMEM;
 		pr_err("Failed to allocate disk\n");
@@ -354,7 +372,7 @@ struct sblkdev_device *sblkdev_add(int major, int minor, char *name,
 	}
 
 #else
-	disk = blk_alloc_disk(NUMA_NO_NODE);
+	disk = sblkdev_blk_alloc_disk(NUMA_NO_NODE);
 	if (!disk) {
 		pr_err("Failed to allocate disk\n");
 		ret = -ENOMEM;
@@ -374,7 +392,7 @@ struct sblkdev_device *sblkdev_add(int major, int minor, char *name,
 	/* disk->flags |= GENHD_FL_REMOVABLE; */
 
 	disk->major = major;
-	disk->first_minor = minor;
+	disk->first_minor = minor; // inx passed via main.c:sblkdev_add()
 	disk->minors = 1;
 
 	disk->fops = &fops;
@@ -384,8 +402,25 @@ struct sblkdev_device *sblkdev_add(int major, int minor, char *name,
 	sprintf(disk->disk_name, name);
 	set_capacity(disk, dev->capacity);
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 14, 0)
+	{
+		struct queue_limits lim = queue_limits_start_update(disk->queue);
+
 #ifdef CONFIG_SBLKDEV_BLOCK_SIZE
-	blk_queue_physical_block_size(disk->queue, CONFIG_SBLKDEV_BLOCK_SIZE);
+		lim.physical_block_size = CONFIG_SBLKDEV_BLOCK_SIZE; // 4096, defined in Makefile-standalone
+		lim.logical_block_size = CONFIG_SBLKDEV_BLOCK_SIZE;
+		lim.io_min = CONFIG_SBLKDEV_BLOCK_SIZE;
+		lim.io_opt = CONFIG_SBLKDEV_BLOCK_SIZE;
+#else
+		lim.physical_block_size = SECTOR_SIZE;
+		lim.logical_block_size = SECTOR_SIZE;
+#endif
+		lim.max_hw_sectors = BLK_SAFE_MAX_SECTORS;
+		queue_limits_commit_update(disk->queue, &lim);
+	}
+#else
+#ifdef CONFIG_SBLKDEV_BLOCK_SIZE
+	blk_queue_physical_block_size(disk->queue, CONFIG_SBLKDEV_BLOCK_SIZE); // 4096, defined in Makefile-standalone
 	blk_queue_logical_block_size(disk->queue, CONFIG_SBLKDEV_BLOCK_SIZE);
 	blk_queue_io_min(disk->queue, CONFIG_SBLKDEV_BLOCK_SIZE);
 	blk_queue_io_opt(disk->queue, CONFIG_SBLKDEV_BLOCK_SIZE);
@@ -394,6 +429,7 @@ struct sblkdev_device *sblkdev_add(int major, int minor, char *name,
 	blk_queue_logical_block_size(disk->queue, SECTOR_SIZE);
 #endif
 	blk_queue_max_hw_sectors(disk->queue, BLK_DEF_MAX_SECTORS);
+#endif
 	blk_queue_flag_set(QUEUE_FLAG_NOMERGES, disk->queue);
 
 
