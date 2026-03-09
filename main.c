@@ -1,5 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0
-
+/*
+ * Simple Block Device Linux kernel module
+ * url: https://github.com/CodeImp/sblkdev  \[1\]
+ *
+ * Ref article: https://prog.world/linux-kernel-5-0-we-write-simple-block-device-under-blk-mq/   \[2\]
+ * Contains a minimum of code to create the most primitive block device.
+ * Read the README.md file for more details.
+ */
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
 #include <linux/module.h>
@@ -65,9 +72,9 @@ static int __init sblkdev_init(void)
 	size_t length;
 
 	sblkdev_major = register_blkdev(sblkdev_major, KBUILD_MODNAME);
-	if (sblkdev_major <= 0) {
+	if (sblkdev_major < 0) {
 		pr_info("Unable to get major number\n");
-		return -EBUSY;
+		return sblkdev_major;
 	}
 
 	length = strlen(sblkdev_catalog);
@@ -82,7 +89,7 @@ static int __init sblkdev_init(void)
 		ret = -ENOMEM;
 		goto fail_unregister;
 	}
-	strcpy(catalog, sblkdev_catalog);
+	strscpy(catalog, sblkdev_catalog, length + 1);
 
 	next_token = catalog;
 	while ((token = strsep(&next_token, ";"))) {
@@ -149,3 +156,4 @@ MODULE_PARM_DESC(catalog, "New block devices catalog in format '<name>,<capacity
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Sergei Shtepa");
+MODULE_DESCRIPTION("Simple modern blk-mq and request based block device driver example");
