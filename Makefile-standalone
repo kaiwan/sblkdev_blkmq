@@ -4,7 +4,7 @@
 CONFIG_SBLKDEV := m
 
 # Allow to select bio-based or request-based block device
-# ccflags-y += "-D CONFIG_SBLKDEV_REQUESTS_BASED"
+ccflags-y += "-D CONFIG_SBLKDEV_REQUESTS_BASED"
 
 # Allow to set specific size of the block
 # ccflags-y += "-D CONFIG_SBLKDEV_BLOCK_SIZE=4096"
