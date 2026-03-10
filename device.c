@@ -35,6 +35,15 @@ static inline int process_request(struct request *rq, unsigned int *nr_bytes)
 	return ret;
 }
 
+/*
+ * The key routine: 'Queue a new request from block IO'.
+ * This function is called by the block layer (blk-mq) when a new request is
+ * ready for the hardware. We're expected to process the request and complete
+ * it by calling blk_mq_end_request() with the appropriate status.
+ * This routine is the heart of the request-based blk-mq driver.
+ * 
+ * This routine is called and runs in an atomic context! Don't sleep.
+ */
 static blk_status_t _queue_rq(struct blk_mq_hw_ctx *hctx, const struct blk_mq_queue_data *bd)
 {
 	unsigned int nr_bytes = 0;
@@ -42,7 +51,7 @@ static blk_status_t _queue_rq(struct blk_mq_hw_ctx *hctx, const struct blk_mq_qu
 	struct request *rq = bd->rq;
 
 	//might_sleep();
-	cant_sleep(); /* cannot use any locks that make the thread sleep */
+	cant_sleep(); /* cannot use any locks or blocking calls that may make the thread sleep */
 
 	blk_mq_start_request(rq);
 
@@ -256,6 +265,9 @@ void sblkdev_remove(struct sblkdev_device *dev)
 }
 
 #ifdef CONFIG_SBLKDEV_REQUESTS_BASED
+/* A critical setup function; here's where we inform the block layer (blk-mq,
+ really) about our hardware's 'shape'.
+ */
 static inline int init_tag_set(struct blk_mq_tag_set *set, void *data)
 {
 	set->ops = &mq_ops;
@@ -275,6 +287,12 @@ static inline int init_tag_set(struct blk_mq_tag_set *set, void *data)
 }
 #endif
 
+//---------------------------------------------------------------------
+/* 
+ * The two functions below ONLY get used when the BIO-based driver's in play
+ * We use the request-based modern blk-mq model by default
+ * (can change in Makefile-standalone)
+ */
 #ifndef HAVE_BLK_MQ_ALLOC_DISK
 static inline struct gendisk *blk_mq_alloc_disk(struct blk_mq_tag_set *set,
 						void *queuedata)
@@ -321,6 +339,7 @@ static inline struct gendisk *sblkdev_blk_alloc_disk(int node)
 	return disk;
 }
 #endif
+//---------------------------------------------------------------------
 
 /*
  * sblkdev_add() - Add simple block device
@@ -433,6 +452,7 @@ struct sblkdev_device *sblkdev_add(int major, int minor, char *name,
 	blk_queue_flag_set(QUEUE_FLAG_NOMERGES, disk->queue);
 
 
+	/* add_disk() makes the disk 'live'! Userspace can now access it */
 #ifdef HAVE_ADD_DISK_RESULT
 	ret = add_disk(disk);
 	if (ret) {
