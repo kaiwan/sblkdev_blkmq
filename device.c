@@ -105,6 +105,11 @@ static inline void process_bio(struct sblkdev_device *dev, struct bio *bio)
 	bio_endio(bio);
 }
 
+/*
+ * NOTE: submit_bio()'s only invoked for the simpler bio-based drivers. In the
+ * modern blk-mq style request-based blk-mq model, _queue_rq() is used instead.
+ * (In fact the #ifdef ... covers it)
+ */
 #ifdef HAVE_QC_SUBMIT_BIO
 blk_qc_t _submit_bio(struct bio *bio)
 {
@@ -443,18 +448,30 @@ struct sblkdev_device *sblkdev_add(int major, int minor, char *name,
 	}
 #else
 #ifdef CONFIG_SBLKDEV_BLOCK_SIZE
-	blk_queue_physical_block_size(disk->queue, CONFIG_SBLKDEV_BLOCK_SIZE); // 4096, defined in Makefile-standalone
-	blk_queue_logical_block_size(disk->queue, CONFIG_SBLKDEV_BLOCK_SIZE);
-	blk_queue_io_min(disk->queue, CONFIG_SBLKDEV_BLOCK_SIZE);
-	blk_queue_io_opt(disk->queue, CONFIG_SBLKDEV_BLOCK_SIZE);
+#if KERNEL_VERSION(6, 11, 0) <= LINUX_VERSION_CODE
+        queue_physical_block_size(disk->queue, CONFIG_SBLKDEV_BLOCK_SIZE); // 4096, defined in Makefile-standalone
+        queue_logical_block_size(disk->queue, CONFIG_SBLKDEV_BLOCK_SIZE);
+        queue_io_min(disk->queue, CONFIG_SBLKDEV_BLOCK_SIZE);
+        queue_io_opt(disk->queue, CONFIG_SBLKDEV_BLOCK_SIZE);
 #else
-	blk_queue_physical_block_size(disk->queue, SECTOR_SIZE);
-	blk_queue_logical_block_size(disk->queue, SECTOR_SIZE);
+        blk_queue_physical_block_size(disk->queue, CONFIG_SBLKDEV_BLOCK_SIZE);
+        blk_queue_logical_block_size(disk->queue, CONFIG_SBLKDEV_BLOCK_SIZE);
+        blk_queue_io_min(disk->queue, CONFIG_SBLKDEV_BLOCK_SIZE);
+        blk_queue_io_opt(disk->queue, CONFIG_SBLKDEV_BLOCK_SIZE);
 #endif
-	blk_queue_max_hw_sectors(disk->queue, BLK_DEF_MAX_SECTORS);
+#else
+#if KERNEL_VERSION(6, 11, 0) <= LINUX_VERSION_CODE
+        queue_physical_block_size(disk->queue);
+        queue_logical_block_size(disk->queue);
+        queue_max_hw_sectors(disk->queue);
+#else
+        blk_queue_physical_block_size(disk->queue, SECTOR_SIZE);
+        blk_queue_logical_block_size(disk->queue, SECTOR_SIZE);
+        blk_queue_max_hw_sectors(disk->queue, BLK_DEF_MAX_SECTORS);
+#endif
+#endif
 #endif
 	blk_queue_flag_set(QUEUE_FLAG_NOMERGES, disk->queue);
-
 
 	/* add_disk() makes the disk 'live'! Userspace can now access it */
 #ifdef HAVE_ADD_DISK_RESULT
