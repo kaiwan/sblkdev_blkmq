@@ -12,8 +12,8 @@
 struct sblkdev_device {
 	struct list_head link;
 
-	sector_t capacity;		/* Device size in sectors */
-	u8 *data;			/* The data in virtual memory */
+	sector_t capacity;	/* Device size in sectors */
+	u8 *data;		/* The data in virtual memory */
 #ifdef CONFIG_SBLKDEV_REQUESTS_BASED
 	struct blk_mq_tag_set tag_set;
 #endif
@@ -21,6 +21,6 @@ struct sblkdev_device {
 };
 
 struct sblkdev_device *sblkdev_add(int major, int minor, char *name,
-				  sector_t capacity);
+				   sector_t capacity);
 struct gendisk *sblkdev_blk_alloc_disk(int node);
 void sblkdev_remove(struct sblkdev_device *dev);

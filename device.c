@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0
 
 #define pr_fmt(fmt) KBUILD_MODNAME ":%s() " fmt, __func__
-#include <linux/hdreg.h> /* for HDIO_GETGEO */
-#include <linux/cdrom.h> /* for CDROM_GET_CAPABILITY */
+#include <linux/hdreg.h>	/* for HDIO_GETGEO */
+#include <linux/cdrom.h>	/* for CDROM_GET_CAPABILITY */
 #include "device.h"
 
 #ifdef CONFIG_SBLKDEV_REQUESTS_BASED
@@ -24,10 +24,10 @@ static inline int process_request(struct request *rq, unsigned int *nr_bytes)
 			len = (unsigned long)(dev_size - pos);
 
 		if (rq_data_dir(rq)) {
-			memcpy(dev->data + pos, buf, len); /* WRITE */
+			memcpy(dev->data + pos, buf, len);	/* WRITE */
 			pr_debug("WRITE at sector %llu\n", pos >> SECTOR_SHIFT);
 		} else {
-			memcpy(buf, dev->data + pos, len); /* READ */
+			memcpy(buf, dev->data + pos, len);	/* READ */
 			pr_debug("READ at sector %llu\n", pos >> SECTOR_SHIFT);
 		}
 
@@ -48,14 +48,15 @@ static inline int process_request(struct request *rq, unsigned int *nr_bytes)
  * 
  * This routine is called and runs in an atomic context! Don't sleep.
  */
-static blk_status_t _queue_rq(struct blk_mq_hw_ctx *hctx, const struct blk_mq_queue_data *bd)
+static blk_status_t _queue_rq(struct blk_mq_hw_ctx *hctx,
+			      const struct blk_mq_queue_data *bd)
 {
 	unsigned int nr_bytes = 0;
 	blk_status_t status = BLK_STS_OK;
 	struct request *rq = bd->rq;
 
 	//might_sleep(); // as opposed to...
-	cant_sleep(); /* cannot use any locks or blocking calls that may make the thread sleep */
+	cant_sleep();		/* cannot use any locks or blocking calls that may make the thread sleep */
 
 	blk_mq_start_request(rq);
 
@@ -73,7 +74,7 @@ static struct blk_mq_ops mq_ops = {
 	.queue_rq = _queue_rq,
 };
 
-#else  /* CONFIG_SBLKDEV_REQUESTS_BASED */
+#else				/* CONFIG_SBLKDEV_REQUESTS_BASED */
 
 static inline void process_bio(struct sblkdev_device *dev, struct bio *bio)
 {
@@ -89,15 +90,18 @@ static inline void process_bio(struct sblkdev_device *dev, struct bio *bio)
 		void *buf = page_address(bvec.bv_page) + bvec.bv_offset;
 
 		if ((pos + len) > dev_size) {
-			/* len = (unsigned long)(dev_size - pos);*/
+			/* len = (unsigned long)(dev_size - pos); */
 			bio->bi_status = BLK_STS_IOERR;
 			break;
 		}
 
-		if (bio_data_dir(bio))
-			memcpy(dev->data + pos, buf, len); /* WRITE */
-		else
-			memcpy(buf, dev->data + pos, len); /* READ */
+		if (rq_data_dir(rq)) {
+			memcpy(dev->data + pos, buf, len);	/* WRITE */
+			pr_debug("WRITE at sector %llu\n", pos >> SECTOR_SHIFT);
+		} else {
+			memcpy(buf, dev->data + pos, len);	/* READ */
+			pr_debug("READ at sector %llu\n", pos >> SECTOR_SHIFT);
+		}
 
 		pos += len;
 	}
@@ -137,8 +141,7 @@ void _submit_bio(struct bio *bio)
 }
 #endif
 
-#endif /* CONFIG_SBLKDEV_REQUESTS_BASED */
-
+#endif				/* CONFIG_SBLKDEV_REQUESTS_BASED */
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 9, 0)
 static int _open(struct gendisk *disk, blk_mode_t mode)
@@ -177,9 +180,10 @@ static void _release(struct gendisk *disk, fmode_t mode)
 	pr_debug("Device was closed\n");
 }
 
-static inline int ioctl_hdio_getgeo(struct sblkdev_device *dev, unsigned long arg)
+static inline int ioctl_hdio_getgeo(struct sblkdev_device *dev,
+				    unsigned long arg)
 {
-	struct hd_geometry geo = {0};
+	struct hd_geometry geo = { 0 };
 
 	geo.start = 0;
 	if (dev->capacity > 63) {
@@ -191,7 +195,7 @@ static inline int ioctl_hdio_getgeo(struct sblkdev_device *dev, unsigned long ar
 		if (quotient > 255) {
 			geo.heads = 255;
 			geo.cylinders = (unsigned short)
-				((quotient + (255 - 1)) / 255);
+			    ((quotient + (255 - 1)) / 255);
 		} else {
 			geo.heads = (unsigned char)quotient;
 			geo.cylinders = 1;
@@ -208,7 +212,8 @@ static inline int ioctl_hdio_getgeo(struct sblkdev_device *dev, unsigned long ar
 	return 0;
 }
 
-static int _ioctl(struct block_device *bdev, fmode_t mode, unsigned int cmd, unsigned long arg)
+static int _ioctl(struct block_device *bdev, fmode_t mode, unsigned int cmd,
+		  unsigned long arg)
 {
 	struct sblkdev_device *dev = bdev->bd_disk->private_data;
 
@@ -225,10 +230,11 @@ static int _ioctl(struct block_device *bdev, fmode_t mode, unsigned int cmd, uns
 }
 
 #ifdef CONFIG_COMPAT
-static int _compat_ioctl(struct block_device *bdev, fmode_t mode, unsigned int cmd, unsigned long arg)
+static int _compat_ioctl(struct block_device *bdev, fmode_t mode,
+			 unsigned int cmd, unsigned long arg)
 {
 	// CONFIG_COMPAT is to allow running 32-bit userspace code on a 64-bit kernel
-	return -ENOTTY; // not supported
+	return -ENOTTY;		// not supported
 }
 #endif
 
@@ -354,7 +360,7 @@ static inline struct gendisk *sblkdev_blk_alloc_disk(int node)
  * sblkdev_add() - Add simple block device
  */
 struct sblkdev_device *sblkdev_add(int major, int minor, char *name,
-				  sector_t capacity)
+				   sector_t capacity)
 {
 	struct sblkdev_device *dev = NULL;
 	int ret = 0;
@@ -376,7 +382,7 @@ struct sblkdev_device *sblkdev_add(int major, int minor, char *name,
 		goto fail_kfree;
 	}
 
-#ifdef CONFIG_SBLKDEV_REQUESTS_BASED        // true; defined in Makefile-standalone
+#ifdef CONFIG_SBLKDEV_REQUESTS_BASED	// true; defined in Makefile-standalone
 	ret = init_tag_set(&dev->tag_set, dev);
 	if (ret) {
 		pr_err("Failed to allocate tag set\n");
@@ -384,9 +390,9 @@ struct sblkdev_device *sblkdev_add(int major, int minor, char *name,
 	}
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 9, 0)
-	disk = blk_mq_alloc_disk(&dev->tag_set, NULL, dev); // set the queue_limits to null, so that the default limits will be used
+	disk = blk_mq_alloc_disk(&dev->tag_set, NULL, dev);	// set the queue_limits to null, so that the default limits will be used
 #else
-	disk = blk_mq_alloc_disk(&dev->tag_set, dev); // set the queue_limits to null, so that the default limits will be used
+	disk = blk_mq_alloc_disk(&dev->tag_set, dev);	// set the queue_limits to null, so that the default limits will be used
 #endif
 	if (unlikely(!disk)) {
 		ret = -ENOMEM;
@@ -420,7 +426,7 @@ struct sblkdev_device *sblkdev_add(int major, int minor, char *name,
 	/* disk->flags |= GENHD_FL_REMOVABLE; */
 
 	disk->major = major;
-	disk->first_minor = minor; // inx passed via main.c:sblkdev_add()
+	disk->first_minor = minor;	// inx passed via main.c:sblkdev_add()
 	disk->minors = 1;
 
 	disk->fops = &fops;
@@ -432,10 +438,11 @@ struct sblkdev_device *sblkdev_add(int major, int minor, char *name,
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 14, 0)
 	{
-		struct queue_limits lim = queue_limits_start_update(disk->queue);
+		struct queue_limits lim =
+		    queue_limits_start_update(disk->queue);
 
 #ifdef CONFIG_SBLKDEV_BLOCK_SIZE
-		lim.physical_block_size = CONFIG_SBLKDEV_BLOCK_SIZE; // 4096, defined in Makefile-standalone
+		lim.physical_block_size = CONFIG_SBLKDEV_BLOCK_SIZE;	// 4096, defined in Makefile-standalone
 		lim.logical_block_size = CONFIG_SBLKDEV_BLOCK_SIZE;
 		lim.io_min = CONFIG_SBLKDEV_BLOCK_SIZE;
 		lim.io_opt = CONFIG_SBLKDEV_BLOCK_SIZE;
@@ -449,25 +456,25 @@ struct sblkdev_device *sblkdev_add(int major, int minor, char *name,
 #else
 #ifdef CONFIG_SBLKDEV_BLOCK_SIZE
 #if KERNEL_VERSION(6, 11, 0) <= LINUX_VERSION_CODE
-        queue_physical_block_size(disk->queue, CONFIG_SBLKDEV_BLOCK_SIZE); // 4096, defined in Makefile-standalone
-        queue_logical_block_size(disk->queue, CONFIG_SBLKDEV_BLOCK_SIZE);
-        queue_io_min(disk->queue, CONFIG_SBLKDEV_BLOCK_SIZE);
-        queue_io_opt(disk->queue, CONFIG_SBLKDEV_BLOCK_SIZE);
+	queue_physical_block_size(disk->queue, CONFIG_SBLKDEV_BLOCK_SIZE);	// 4096, defined in Makefile-standalone
+	queue_logical_block_size(disk->queue, CONFIG_SBLKDEV_BLOCK_SIZE);
+	queue_io_min(disk->queue, CONFIG_SBLKDEV_BLOCK_SIZE);
+	queue_io_opt(disk->queue, CONFIG_SBLKDEV_BLOCK_SIZE);
 #else
-        blk_queue_physical_block_size(disk->queue, CONFIG_SBLKDEV_BLOCK_SIZE);
-        blk_queue_logical_block_size(disk->queue, CONFIG_SBLKDEV_BLOCK_SIZE);
-        blk_queue_io_min(disk->queue, CONFIG_SBLKDEV_BLOCK_SIZE);
-        blk_queue_io_opt(disk->queue, CONFIG_SBLKDEV_BLOCK_SIZE);
+	blk_queue_physical_block_size(disk->queue, CONFIG_SBLKDEV_BLOCK_SIZE);
+	blk_queue_logical_block_size(disk->queue, CONFIG_SBLKDEV_BLOCK_SIZE);
+	blk_queue_io_min(disk->queue, CONFIG_SBLKDEV_BLOCK_SIZE);
+	blk_queue_io_opt(disk->queue, CONFIG_SBLKDEV_BLOCK_SIZE);
 #endif
 #else
 #if KERNEL_VERSION(6, 11, 0) <= LINUX_VERSION_CODE
-        queue_physical_block_size(disk->queue);
-        queue_logical_block_size(disk->queue);
-        queue_max_hw_sectors(disk->queue);
+	queue_physical_block_size(disk->queue);
+	queue_logical_block_size(disk->queue);
+	queue_max_hw_sectors(disk->queue);
 #else
-        blk_queue_physical_block_size(disk->queue, SECTOR_SIZE);
-        blk_queue_logical_block_size(disk->queue, SECTOR_SIZE);
-        blk_queue_max_hw_sectors(disk->queue, BLK_DEF_MAX_SECTORS);
+	blk_queue_physical_block_size(disk->queue, SECTOR_SIZE);
+	blk_queue_logical_block_size(disk->queue, SECTOR_SIZE);
+	blk_queue_max_hw_sectors(disk->queue, BLK_DEF_MAX_SECTORS);
 #endif
 #endif
 #endif
@@ -489,7 +496,7 @@ struct sblkdev_device *sblkdev_add(int major, int minor, char *name,
 	return dev;
 
 #ifdef HAVE_ADD_DISK_RESULT
-fail_put_disk:
+ fail_put_disk:
 #ifdef HAVE_BLK_MQ_ALLOC_DISK
 #ifdef HAVE_BLK_CLEANUP_DISK
 	blk_cleanup_disk(dev->disk);
@@ -500,17 +507,17 @@ fail_put_disk:
 	blk_cleanup_queue(dev->queue);
 	put_disk(dev->disk);
 #endif
-#endif /* HAVE_ADD_DISK_RESULT */
+#endif				/* HAVE_ADD_DISK_RESULT */
 
 #ifdef CONFIG_SBLKDEV_REQUESTS_BASED
-fail_free_tag_set:
+ fail_free_tag_set:
 	blk_mq_free_tag_set(&dev->tag_set);
 #endif
-fail_vfree:
+ fail_vfree:
 	vfree(dev->data);
-fail_kfree:
+ fail_kfree:
 	kfree(dev);
-fail:
+ fail:
 	pr_err("Failed to add block device\n");
 
 	return ERR_PTR(ret);
