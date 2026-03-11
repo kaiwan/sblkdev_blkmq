@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 
-#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+#define pr_fmt(fmt) KBUILD_MODNAME ":%s() " fmt, __func__
 #include <linux/hdreg.h> /* for HDIO_GETGEO */
 #include <linux/cdrom.h> /* for CDROM_GET_CAPABILITY */
 #include "device.h"
@@ -23,10 +23,13 @@ static inline int process_request(struct request *rq, unsigned int *nr_bytes)
 		if ((pos + len) > dev_size)
 			len = (unsigned long)(dev_size - pos);
 
-		if (rq_data_dir(rq))
+		if (rq_data_dir(rq)) {
 			memcpy(dev->data + pos, buf, len); /* WRITE */
-		else
+			pr_debug("WRITE at sector %llu\n", pos >> SECTOR_SHIFT);
+		} else {
 			memcpy(buf, dev->data + pos, len); /* READ */
+			pr_debug("READ at sector %llu\n", pos >> SECTOR_SHIFT);
+		}
 
 		pos += len;
 		*nr_bytes += len;
@@ -36,11 +39,12 @@ static inline int process_request(struct request *rq, unsigned int *nr_bytes)
 }
 
 /*
- * The key routine: 'Queue a new request from block IO'.
+ * This routine is the heart of the request-based blk-mq driver:
+ *  'Queue a new request from block IO'.
  * This function is called by the block layer (blk-mq) when a new request is
- * ready for the hardware. We're expected to process the request and complete
- * it by calling blk_mq_end_request() with the appropriate status.
- * This routine is the heart of the request-based blk-mq driver.
+ * ready for the hardware. We're expected to process the request, first calling
+ * blk_mq_start_request(), process it, and complete it by calling
+ * blk_mq_end_request() with the appropriate status.
  * 
  * This routine is called and runs in an atomic context! Don't sleep.
  */
@@ -50,7 +54,7 @@ static blk_status_t _queue_rq(struct blk_mq_hw_ctx *hctx, const struct blk_mq_qu
 	blk_status_t status = BLK_STS_OK;
 	struct request *rq = bd->rq;
 
-	//might_sleep();
+	//might_sleep(); // as opposed to...
 	cant_sleep(); /* cannot use any locks or blocking calls that may make the thread sleep */
 
 	blk_mq_start_request(rq);
@@ -109,7 +113,7 @@ blk_qc_t _submit_bio(struct bio *bio)
 void _submit_bio(struct bio *bio)
 {
 #endif
-#ifdef HAVE_BI_BDEV
+#ifdef HAVE_BI_BDEV		// more recent
 	struct sblkdev_device *dev = bio->bi_bdev->bd_disk->private_data;
 #endif
 #ifdef HAVE_BI_BDISK
