@@ -30,6 +30,16 @@ static inline int process_request(struct request *rq, unsigned int *nr_bytes)
 			memcpy(buf, dev->data + pos, len);	/* READ */
 			pr_debug("READ at sector %llu\n", pos >> SECTOR_SHIFT);
 		}
+		/*
+         * Interesting: found that the 'WRITE' debug msg appears but the
+         * 'READ' doesn't seem to? Well, it's the page cache doing it's
+         * job!! So, to test this, first empty the page cache, and then
+         * try, like this:
+         * # sync ; echo 0 > /proc/sys/vm/drop_caches
+         * (the sync is important!)
+         * It then works as the code has to actually travel down the entire
+         * storage stack and be read from the device.
+         */
 
 		pos += len;
 		*nr_bytes += len;
@@ -102,16 +112,9 @@ static inline void process_bio(struct sblkdev_device *dev, struct bio *bio)
 			memcpy(buf, dev->data + pos, len);	/* READ */
 			pr_debug("READ at sector %llu\n", pos >> SECTOR_SHIFT);
 		}
-		 /*
-          * Interesting: found that the 'WRITE' debug msg appears but the
-          * 'READ' doesn't seem to? Well, it's the page cache doing it's
-          * job!! So, to test this, first empty the page cache, and then
-          * try, like this:
-          * # sync ; echo 1 > /proc/sys/vm/drop_caches
-          * (the sync is important!)
-          * It then works as the code has to actually travel down the entire
-          * storage stack and be read from the device.
-          */
+		/* Can refer the  'Interesting: found that the 'WRITE' debug msg ...'
+		 * comment above ...
+		 */
 
 		pos += len;
 	}
