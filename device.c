@@ -35,7 +35,7 @@ static inline int process_request(struct request *rq, unsigned int *nr_bytes)
          * 'READ' doesn't seem to? Well, it's the page cache doing it's
          * job!! So, to test this, first empty the page cache, and then
          * try, like this:
-         * # sync ; echo 0 > /proc/sys/vm/drop_caches
+         * # sync ; echo 1 > /proc/sys/vm/drop_caches
          * (the sync is important!)
          * It then works as the code has to actually travel down the entire
          * storage stack and be read from the device.
@@ -294,21 +294,24 @@ void sblkdev_remove(struct sblkdev_device *dev)
 
 #ifdef CONFIG_SBLKDEV_REQUESTS_BASED
 /* A critical setup function; here's where we inform the block layer (blk-mq,
- really) about our hardware's 'shape'.
+ * really) about our hardware's 'shape'.
  */
 static inline int init_tag_set(struct blk_mq_tag_set *set, void *data)
 {
 	set->ops = &mq_ops;
 	set->nr_hw_queues = 1;
 	set->nr_maps = 1;
-	set->queue_depth = 128;
+	set->queue_depth = 128; // critical: how many requests can be "in-flight" per hardware queue
 	set->numa_node = NUMA_NO_NODE;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 14, 0)
 	set->flags = BLK_MQ_F_STACKING;
 #else
 	set->flags = BLK_MQ_F_SHOULD_MERGE | BLK_MQ_F_STACKING;
 #endif
-	set->cmd_size = 0;
+	set->cmd_size = 0;  /* extra bytes to allocate for each command; typically 
+	 					 * used to retrieve driver pvt data; not needed for our
+						 * simple driver
+						 */
 	set->driver_data = data;
 
 	return blk_mq_alloc_tag_set(set);
