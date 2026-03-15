@@ -9,6 +9,7 @@
 #include <linux/vmalloc.h>
 #include <linux/version.h>
 
+// Our Private Data Unit (PDU) - pvt DS for the driver
 struct sblkdev_device {
 	struct list_head link;
 
