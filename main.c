@@ -7,7 +7,7 @@
  * Contains a minimum of code to create the most primitive block device.
  * Read the README.md file for more details.
  */
-#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+#define pr_fmt(fmt) KBUILD_MODNAME ":%s() " fmt, __func__
 
 #include <linux/module.h>
 #include "device.h"
@@ -123,7 +123,7 @@ static int __init sblkdev_init(void)
 	if (ret == 0)
 		return 0;
 
- fail_unregister:
+fail_unregister:
 	unregister_blkdev(sblkdev_major, KBUILD_MODNAME);
 	return ret;
 }
@@ -152,10 +152,8 @@ module_init(sblkdev_init);
 module_exit(sblkdev_exit);
 
 module_param_named(catalog, sblkdev_catalog, charp, 0644);
-MODULE_PARM_DESC(catalog,
-		 "New block devices catalog in format '<name>,<capacity sectors>;...'");
+MODULE_PARM_DESC(catalog, "New block devices catalog in format '<name>,<capacity sectors>;...'");
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Sergei Shtepa");
-MODULE_DESCRIPTION
-    ("Simple modern blk-mq and request based block device driver example");
+MODULE_DESCRIPTION("Simple modern blk-mq and request based block device driver example");
